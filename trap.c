@@ -33,9 +33,16 @@ idtinit(void)
 }
 
 //PAGEBREAK: 41
+// Trap通俗一点来讲，就是由用户程序触发的操作系统用户态与内核态的切换：https://zhuanlan.zhihu.com/p/460874372
+/**
+ * 陷阱门处理函数，由trapasm.S进行调用，即当某些操作触发了用户态与内核态的切换时会调用此函数
+ * @param tf 陷阱帧，内部包含陷阱号，可以根据陷阱号进行不同的处理
+ */
 void
 trap(struct trapframe *tf)
 {
+  // 如果是系统调用，则将tf设置到当前proc中，
+  // 再调用syscall函数进一步调用对应的具体系统调用
   if(tf->trapno == T_SYSCALL){
     if(proc->killed)
       exit();

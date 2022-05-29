@@ -123,12 +123,17 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 };
 
+
+/**
+ * 系统调用入口函数，负责根据陷阱帧包含的系统调用号调用对应的系统调用函数
+ */
 void
 syscall(void)
 {
   int num;
-
+  // 获取在usys.S中设置到eax中的系统调用号
   num = proc->tf->eax;
+  // 根据系统调用号到syscalls数组中取对应的系统调用函数进行调用
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     proc->tf->eax = syscalls[num]();
   } else {
