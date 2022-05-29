@@ -32,29 +32,39 @@ pinit(void)
 // state required to run in the kernel.
 // Otherwise return 0.
 // Must hold ptable.lock.
+/**
+ * 函数功能：分配一个进程控制块，并对其进行初始化操作
+ * @return {proc*} 返回分配的proc的指针，分配失败则返回0
+ */
 static struct proc*
 allocproc(void)
 {
   struct proc *p;
   char *sp;
 
+  // 遍历进程表中的每个进程控制块，如果找到一个未被分配的则跳转到found
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == UNUSED)
       goto found;
   return 0;
 
 found:
+  // 进程状态设置为婴儿状态
   p->state = EMBRYO;
+  // 分配pid
   p->pid = nextpid++;
 
   // Allocate kernel stack.
+  // 分配内核栈，这里即调用kalloc方法分配一个页的空间（4kB）
   if((p->kstack = kalloc()) == 0){
     p->state = UNUSED;
     return 0;
   }
+  // 栈指针放到栈顶
   sp = p->kstack + KSTACKSIZE;
 
   // Leave room for trap frame.
+  // 同上面的注释，为陷阱帧保留空间，即在栈上分配空间给陷阱帧
   sp -= sizeof *p->tf;
   p->tf = (struct trapframe*)sp;
 
@@ -63,6 +73,7 @@ found:
   sp -= 4;
   *(uint*)sp = (uint)trapret;
 
+  // 同理分配栈空间给context
   sp -= sizeof *p->context;
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
@@ -127,21 +138,30 @@ growproc(int n)
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
+/**
+ * 根据父进程的proc创建子进程的进程控制块
+ * @return {int} -1 操作失败 : else 子进程 pid
+ */
 int
 fork(void)
 {
   int i, pid;
   struct proc *np;
 
+  // 对进程表结构体（内部包含进程数组）进行加锁
   acquire(&ptable.lock);
 
   // Allocate process.
+  // 分配进程控制块PCB
   if((np = allocproc()) == 0){
+    // 分配失败则返回，一般当进程数超过64时会失败
     release(&ptable.lock);
     return -1;
   }
 
   // Copy process state from p.
+  // 同原注释，复制主进程的proc属性到子进程的proc（下面的np）中
+  // 首先是调用copyuvm函数复制页表
   if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
@@ -150,12 +170,14 @@ fork(void)
     return -1;
   }
   np->sz = proc->sz;
+  // 设置子进程proc的parent为父进程的proc
   np->parent = proc;
   *np->tf = *proc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
+  // 继续复制剩余内容
   for(i = 0; i < NOFILE; i++)
     if(proc->ofile[i])
       np->ofile[i] = filedup(proc->ofile[i]);
@@ -163,10 +185,13 @@ fork(void)
 
   safestrcpy(np->name, proc->name, sizeof(proc->name));
 
+  // 父进程调用proc生成子进程，需要返回子进程的pid
   pid = np->pid;
 
+  // 子进程state由EMBRYO修改为RUNNABLE，进而子进程会在ptable中被调度器调度执行
   np->state = RUNNABLE;
 
+  //释放进程表锁，保证整个创建过程的原子性
   release(&ptable.lock);
 
   return pid;

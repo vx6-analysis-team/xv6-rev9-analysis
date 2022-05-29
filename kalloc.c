@@ -79,6 +79,10 @@ kfree(char *v)
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
+/**
+ * 从物理内存中分配一个页的空间（4096字节）
+ * @return {char*} 0 分配失败 ： else 分配的空间的首地址
+ */
 char*
 kalloc(void)
 {
@@ -86,8 +90,10 @@ kalloc(void)
 
   if(kmem.use_lock)
     acquire(&kmem.lock);
+  // 获取当前空闲列表指向的空闲页
   r = kmem.freelist;
   if(r)
+    // 空闲列表向后移动
     kmem.freelist = r->next;
   if(kmem.use_lock)
     release(&kmem.lock);
